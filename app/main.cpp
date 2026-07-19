@@ -34,10 +34,9 @@ int main() {
     }};
 
     std::cout << "cycle,input_sequence,gear,mode,fault,torque_limit,crc\n";
-    std::uint32_t now_ms = 0U;
     for (std::size_t index = 0U; index < drive_cycle.size(); ++index) {
-        now_ms = drive_cycle[index].timestamp_ms;
-        const tca::ControlOutput output = application.step(drive_cycle[index], now_ms, 800U);
+        const tca::ControlOutput output = application.step(
+            drive_cycle[index], drive_cycle[index].timestamp_ms, 800U);
         std::cout << index << ',' << drive_cycle[index].sequence << ','
                   << gear_name(output.selected_gear) << ','
                   << static_cast<unsigned int>(output.mode) << ','
