@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler:
+          - cc: gcc
+            cxx: g++
+          - cc: clang
+            cxx: clang++
+    env:
+      CC: ${{ matrix.compiler.cc }}
+      CXX: ${{ matrix.compiler.cxx }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DTCA_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Run architecture scenario
+        run: ./build/transmission_architecture_runner
+
+  quality-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install static analysis tools
+        run: sudo apt-get update && sudo apt-get install -y clang-tidy cppcheck
+      - name: Configure clang-tidy build
+        run: cmake -S . -B build-tidy -DTCA_WARNINGS_AS_ERRORS=ON -DTCA_ENABLE_CLANG_TIDY=ON
+      - name: Build with clang-tidy
+        run: cmake --build build-tidy --parallel
+      - name: Run cppcheck
+        run: >-
+          cppcheck --enable=warning,style,performance,portability
+          --error-exitcode=1 --std=c++20 --suppress=missingIncludeSystem
+          --inline-suppr include src app tests
+      - name: Configure sanitizer build
+        run: cmake -S . -B build-sanitized -DTCA_WARNINGS_AS_ERRORS=ON -DTCA_ENABLE_SANITIZERS=ON
+      - name: Build sanitizer targets
+        run: cmake --build build-sanitized --parallel
+      - name: Run sanitizer tests
+        run: ctest --test-dir build-sanitized --output-on-failure
