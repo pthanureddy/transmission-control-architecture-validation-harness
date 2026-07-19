@@ -1,0 +1,361 @@
+#include "tca/control_application.hpp"
+#include "tca/plausibility_monitor.hpp"
+#include "tca/safety_crc.h"
+#include "tca/safety_supervisor.hpp"
+#include "tca/shift_controller.hpp"
+
+#include <array>
+#include <cstdint>
+#include <iostream>
+
+namespace {
+
+#define CHECK_TRUE(expression)                                                               \
+    do {                                                                                     \
+        if (!(expression)) {                                                                 \
+            std::cerr << "check failed at line " << __LINE__ << ": " #expression << '\n'; \
+            return false;                                                                    \
+        }                                                                                    \
+    } while (false)
+
+#define CHECK_EQ(actual, expected) CHECK_TRUE((actual) == (expected))
+
+tca::SensorFrame valid_frame() {
+    return {1U, 100U, 0.0, 800.0, 0.0, 10.0, 10.5, true, tca::DirectionRequest::Park};
+}
+
+bool crc_empty_payload_is_defined() {
+    CHECK_EQ(tca_crc8_sae_j1850(nullptr, 0U), 0U);
+    return true;
+}
+
+bool crc_rejects_null_non_empty_payload() {
+    CHECK_EQ(tca_crc8_sae_j1850(nullptr, 1U), 0U);
+    return true;
+}
+
+bool crc_is_deterministic() {
+    const std::array<std::uint8_t, 4U> data{1U, 2U, 3U, 4U};
+    CHECK_EQ(tca_crc8_sae_j1850(data.data(), data.size()),
+             tca_crc8_sae_j1850(data.data(), data.size()));
+    return true;
+}
+
+bool crc_changes_when_payload_changes() {
+    const std::array<std::uint8_t, 4U> first{1U, 2U, 3U, 4U};
+    const std::array<std::uint8_t, 4U> second{1U, 2U, 3U, 5U};
+    CHECK_TRUE(tca_crc8_sae_j1850(first.data(), first.size()) !=
+               tca_crc8_sae_j1850(second.data(), second.size()));
+    return true;
+}
+
+bool valid_inputs_are_accepted() {
+    const tca::PlausibilityMonitor monitor{};
+    CHECK_TRUE(monitor.validate(valid_frame(), 100U).valid);
+    return true;
+}
+
+bool primary_throttle_range_is_checked() {
+    auto frame = valid_frame();
+    frame.throttle_primary_pct = 101.0;
+    const auto result = tca::PlausibilityMonitor{}.validate(frame, 100U);
+    CHECK_EQ(result.fault, tca::FaultCode::InputRange);
+    return true;
+}
+
+bool redundant_throttle_range_is_checked() {
+    auto frame = valid_frame();
+    frame.throttle_redundant_pct = -0.1;
+    const auto result = tca::PlausibilityMonitor{}.validate(frame, 100U);
+    CHECK_EQ(result.fault, tca::FaultCode::InputRange);
+    return true;
+}
+
+bool speed_range_is_checked() {
+    auto frame = valid_frame();
+    frame.vehicle_speed_kph = 261.0;
+    const auto result = tca::PlausibilityMonitor{}.validate(frame, 100U);
+    CHECK_EQ(result.fault, tca::FaultCode::InputRange);
+    return true;
+}
+
+bool shaft_speed_range_is_checked() {
+    auto frame = valid_frame();
+    frame.input_shaft_rpm = 12001.0;
+    const auto result = tca::PlausibilityMonitor{}.validate(frame, 100U);
+    CHECK_EQ(result.fault, tca::FaultCode::InputRange);
+    return true;
+}
+
+bool redundant_throttle_disagreement_is_detected() {
+    auto frame = valid_frame();
+    frame.throttle_redundant_pct = 20.0;
+    const auto result = tca::PlausibilityMonitor{}.validate(frame, 100U);
+    CHECK_EQ(result.fault, tca::FaultCode::SensorDisagreement);
+    return true;
+}
+
+bool stale_input_is_detected() {
+    auto frame = valid_frame();
+    frame.timestamp_ms = 100U;
+    const auto result = tca::PlausibilityMonitor{}.validate(frame, 201U);
+    CHECK_EQ(result.fault, tca::FaultCode::StaleInput);
+    return true;
+}
+
+bool future_timestamp_does_not_underflow() {
+    auto frame = valid_frame();
+    frame.timestamp_ms = 200U;
+    CHECK_TRUE(tca::PlausibilityMonitor{}.validate(frame, 100U).valid);
+    return true;
+}
+
+bool controller_starts_in_park() {
+    CHECK_EQ(tca::ShiftController{}.current_gear(), tca::Gear::Park);
+    return true;
+}
+
+bool drive_request_selects_first_gear_at_low_speed() {
+    tca::ShiftController controller{};
+    auto frame = valid_frame();
+    frame.direction_request = tca::DirectionRequest::Drive;
+    frame.vehicle_speed_kph = 8.0;
+    CHECK_EQ(controller.update(frame).gear, tca::Gear::First);
+    return true;
+}
+
+bool drive_schedule_upshifts_with_speed() {
+    tca::ShiftController controller{};
+    auto frame = valid_frame();
+    frame.direction_request = tca::DirectionRequest::Drive;
+    frame.vehicle_speed_kph = 55.0;
+    CHECK_EQ(controller.update(frame).gear, tca::Gear::Fourth);
+    return true;
+}
+
+bool high_load_delays_upshift() {
+    tca::ShiftController low_load{};
+    tca::ShiftController high_load{};
+    auto frame = valid_frame();
+    frame.direction_request = tca::DirectionRequest::Drive;
+    frame.vehicle_speed_kph = 32.0;
+    frame.throttle_primary_pct = 20.0;
+    const auto low_load_gear = low_load.update(frame).gear;
+    frame.throttle_primary_pct = 80.0;
+    const auto high_load_gear = high_load.update(frame).gear;
+    CHECK_EQ(low_load_gear, tca::Gear::Third);
+    CHECK_EQ(high_load_gear, tca::Gear::Second);
+    return true;
+}
+
+bool reverse_is_allowed_at_standstill() {
+    tca::ShiftController controller{};
+    auto frame = valid_frame();
+    frame.direction_request = tca::DirectionRequest::Reverse;
+    CHECK_EQ(controller.update(frame).gear, tca::Gear::Reverse);
+    return true;
+}
+
+bool reverse_is_rejected_while_moving_forward() {
+    tca::ShiftController controller{};
+    auto frame = valid_frame();
+    frame.direction_request = tca::DirectionRequest::Drive;
+    frame.vehicle_speed_kph = 20.0;
+    CHECK_EQ(controller.update(frame).fault, tca::FaultCode::None);
+    frame.direction_request = tca::DirectionRequest::Reverse;
+    CHECK_EQ(controller.update(frame).fault, tca::FaultCode::IllegalDirectionChange);
+    return true;
+}
+
+bool park_is_rejected_at_speed() {
+    tca::ShiftController controller{};
+    auto frame = valid_frame();
+    frame.direction_request = tca::DirectionRequest::Drive;
+    frame.vehicle_speed_kph = 30.0;
+    (void)controller.update(frame);
+    frame.direction_request = tca::DirectionRequest::Park;
+    CHECK_EQ(controller.update(frame).fault, tca::FaultCode::IllegalDirectionChange);
+    return true;
+}
+
+bool validation_fault_is_latched() {
+    tca::SafetySupervisor supervisor{};
+    supervisor.evaluate({false, tca::FaultCode::InputRange}, tca::FaultCode::None, 100U);
+    CHECK_EQ(supervisor.mode(), tca::OperatingMode::SafeState);
+    CHECK_EQ(supervisor.latched_fault(), tca::FaultCode::InputRange);
+    return true;
+}
+
+bool watchdog_overrun_is_latched() {
+    tca::SafetySupervisor supervisor{};
+    supervisor.evaluate({true, tca::FaultCode::None}, tca::FaultCode::None, 5001U);
+    CHECK_EQ(supervisor.latched_fault(), tca::FaultCode::WatchdogOverrun);
+    return true;
+}
+
+bool first_fault_is_preserved() {
+    tca::SafetySupervisor supervisor{};
+    supervisor.evaluate({false, tca::FaultCode::StaleInput}, tca::FaultCode::None, 100U);
+    supervisor.evaluate({false, tca::FaultCode::InputRange}, tca::FaultCode::None, 100U);
+    CHECK_EQ(supervisor.latched_fault(), tca::FaultCode::StaleInput);
+    return true;
+}
+
+bool reset_is_rejected_while_moving() {
+    tca::SafetySupervisor supervisor{};
+    supervisor.evaluate({false, tca::FaultCode::InputRange}, tca::FaultCode::None, 100U);
+    auto frame = valid_frame();
+    frame.vehicle_speed_kph = 2.0;
+    CHECK_TRUE(!supervisor.request_reset(frame, {true, tca::FaultCode::None}));
+    return true;
+}
+
+bool reset_requires_brake() {
+    tca::SafetySupervisor supervisor{};
+    supervisor.evaluate({false, tca::FaultCode::InputRange}, tca::FaultCode::None, 100U);
+    auto frame = valid_frame();
+    frame.brake_applied = false;
+    CHECK_TRUE(!supervisor.request_reset(frame, {true, tca::FaultCode::None}));
+    return true;
+}
+
+bool reset_is_accepted_at_safe_standstill() {
+    tca::SafetySupervisor supervisor{};
+    supervisor.evaluate({false, tca::FaultCode::InputRange}, tca::FaultCode::None, 100U);
+    CHECK_TRUE(supervisor.request_reset(valid_frame(), {true, tca::FaultCode::None}));
+    CHECK_EQ(supervisor.latched_fault(), tca::FaultCode::None);
+    return true;
+}
+
+bool valid_application_cycle_selects_drive_gear() {
+    tca::ControlApplication application{};
+    auto frame = valid_frame();
+    frame.direction_request = tca::DirectionRequest::Drive;
+    frame.vehicle_speed_kph = 10.0;
+    const auto output = application.step(frame, 100U, 900U);
+    CHECK_EQ(output.mode, tca::OperatingMode::Normal);
+    CHECK_EQ(output.selected_gear, tca::Gear::First);
+    CHECK_EQ(output.torque_limit_pct, 100U);
+    return true;
+}
+
+bool sensor_disagreement_forces_safe_output() {
+    tca::ControlApplication application{};
+    auto frame = valid_frame();
+    frame.throttle_redundant_pct = 40.0;
+    const auto output = application.step(frame, 100U, 900U);
+    CHECK_EQ(output.mode, tca::OperatingMode::SafeState);
+    CHECK_EQ(output.selected_gear, tca::Gear::Neutral);
+    CHECK_EQ(output.torque_limit_pct, 0U);
+    CHECK_TRUE(output.shift_inhibited);
+    return true;
+}
+
+bool application_fault_remains_latched() {
+    tca::ControlApplication application{};
+    auto bad = valid_frame();
+    bad.throttle_redundant_pct = 40.0;
+    (void)application.step(bad, 100U, 900U);
+    const auto output = application.step(valid_frame(), 100U, 900U);
+    CHECK_EQ(output.mode, tca::OperatingMode::SafeState);
+    return true;
+}
+
+bool application_reset_recovers_on_next_cycle() {
+    tca::ControlApplication application{};
+    auto bad = valid_frame();
+    bad.throttle_redundant_pct = 40.0;
+    (void)application.step(bad, 100U, 900U);
+    const auto safe = valid_frame();
+    CHECK_TRUE(application.request_fault_reset(safe, 100U));
+    const auto output = application.step(safe, 100U, 900U);
+    CHECK_EQ(output.mode, tca::OperatingMode::Normal);
+    return true;
+}
+
+bool output_sequence_increments() {
+    tca::ControlApplication application{};
+    const auto first = application.step(valid_frame(), 100U, 900U);
+    const auto second = application.step(valid_frame(), 100U, 900U);
+    CHECK_EQ(second.sequence, first.sequence + 1U);
+    return true;
+}
+
+bool output_crc_is_reproducible() {
+    tca::ControlApplication first_application{};
+    tca::ControlApplication second_application{};
+    const auto first = first_application.step(valid_frame(), 100U, 900U);
+    const auto second = second_application.step(valid_frame(), 100U, 900U);
+    CHECK_EQ(first.integrity_crc, second.integrity_crc);
+    return true;
+}
+
+bool illegal_direction_change_reaches_safe_state() {
+    tca::ControlApplication application{};
+    auto frame = valid_frame();
+    frame.direction_request = tca::DirectionRequest::Drive;
+    frame.vehicle_speed_kph = 25.0;
+    (void)application.step(frame, 100U, 900U);
+    frame.direction_request = tca::DirectionRequest::Reverse;
+    const auto output = application.step(frame, 100U, 900U);
+    CHECK_EQ(output.fault, tca::FaultCode::IllegalDirectionChange);
+    CHECK_EQ(output.mode, tca::OperatingMode::SafeState);
+    return true;
+}
+
+struct TestCase {
+    const char *name;
+    bool (*run)();
+};
+
+constexpr std::array<TestCase, 32U> tests{{
+    {"crc_empty_payload_is_defined", crc_empty_payload_is_defined},
+    {"crc_rejects_null_non_empty_payload", crc_rejects_null_non_empty_payload},
+    {"crc_is_deterministic", crc_is_deterministic},
+    {"crc_changes_when_payload_changes", crc_changes_when_payload_changes},
+    {"valid_inputs_are_accepted", valid_inputs_are_accepted},
+    {"primary_throttle_range_is_checked", primary_throttle_range_is_checked},
+    {"redundant_throttle_range_is_checked", redundant_throttle_range_is_checked},
+    {"speed_range_is_checked", speed_range_is_checked},
+    {"shaft_speed_range_is_checked", shaft_speed_range_is_checked},
+    {"redundant_throttle_disagreement_is_detected", redundant_throttle_disagreement_is_detected},
+    {"stale_input_is_detected", stale_input_is_detected},
+    {"future_timestamp_does_not_underflow", future_timestamp_does_not_underflow},
+    {"controller_starts_in_park", controller_starts_in_park},
+    {"drive_request_selects_first_gear_at_low_speed", drive_request_selects_first_gear_at_low_speed},
+    {"drive_schedule_upshifts_with_speed", drive_schedule_upshifts_with_speed},
+    {"high_load_delays_upshift", high_load_delays_upshift},
+    {"reverse_is_allowed_at_standstill", reverse_is_allowed_at_standstill},
+    {"reverse_is_rejected_while_moving_forward", reverse_is_rejected_while_moving_forward},
+    {"park_is_rejected_at_speed", park_is_rejected_at_speed},
+    {"validation_fault_is_latched", validation_fault_is_latched},
+    {"watchdog_overrun_is_latched", watchdog_overrun_is_latched},
+    {"first_fault_is_preserved", first_fault_is_preserved},
+    {"reset_is_rejected_while_moving", reset_is_rejected_while_moving},
+    {"reset_requires_brake", reset_requires_brake},
+    {"reset_is_accepted_at_safe_standstill", reset_is_accepted_at_safe_standstill},
+    {"valid_application_cycle_selects_drive_gear", valid_application_cycle_selects_drive_gear},
+    {"sensor_disagreement_forces_safe_output", sensor_disagreement_forces_safe_output},
+    {"application_fault_remains_latched", application_fault_remains_latched},
+    {"application_reset_recovers_on_next_cycle", application_reset_recovers_on_next_cycle},
+    {"output_sequence_increments", output_sequence_increments},
+    {"output_crc_is_reproducible", output_crc_is_reproducible},
+    {"illegal_direction_change_reaches_safe_state", illegal_direction_change_reaches_safe_state},
+}};
+
+}  // namespace
+
+int main() {
+    std::size_t passed = 0U;
+    for (const auto &test : tests) {
+        if (test.run()) {
+            ++passed;
+            std::cout << "PASS " << test.name << '\n';
+        } else {
+            std::cout << "FAIL " << test.name << '\n';
+        }
+    }
+
+    std::cout << passed << '/' << tests.size() << " tests passed\n";
+    return passed == tests.size() ? 0 : 1;
+}

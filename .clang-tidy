@@ -1,0 +1,10 @@
+Checks: >
+  -*,
+  clang-analyzer-*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  performance-*
+WarningsAsErrors: '*'
+HeaderFilterRegex: '(^|/)(include|src|app)/'
+FormatStyle: none
+
