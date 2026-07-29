@@ -3,6 +3,7 @@
 #include "tca/safety_crc.h"
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -36,7 +37,7 @@ std::uint16_t pack_scaled_u16(const double value, const double scale) noexcept {
     if (scaled >= static_cast<double>(std::numeric_limits<std::uint16_t>::max())) {
         return std::numeric_limits<std::uint16_t>::max();
     }
-    return static_cast<std::uint16_t>(scaled + 0.5);
+    return static_cast<std::uint16_t>(std::lround(scaled));
 }
 
 std::uint8_t pack_throttle(const double value) noexcept {
@@ -46,7 +47,7 @@ std::uint8_t pack_throttle(const double value) noexcept {
     if (value >= 100.0) {
         return 200U;
     }
-    return static_cast<std::uint8_t>((value * 2.0) + 0.5);
+    return static_cast<std::uint8_t>(std::lround(value * 2.0));
 }
 
 void write_u16(std::array<std::uint8_t, 8U> &data,
