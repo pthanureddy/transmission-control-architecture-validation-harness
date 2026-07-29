@@ -14,6 +14,8 @@
 | SWR-010 | SafetySupervisor / ControlApplication | `reset_is_rejected_while_moving`, `reset_requires_brake`, `reset_is_accepted_at_safe_standstill`, `application_reset_recovers_on_next_cycle` |
 | SWR-011 | ControlApplication | `output_sequence_increments` |
 | SWR-012 | C CRC / ControlApplication | `crc_empty_payload_is_defined`, `crc_rejects_null_non_empty_payload`, `crc_is_deterministic`, `crc_changes_when_payload_changes`, `output_crc_is_reproducible` |
+| SWR-013 | CanInputAssembler / C CRC | `can_crc_accepts_valid_motion_frame`, `can_rejects_bad_crc`, `can_rejects_wrong_dlc`, `can_rejects_unknown_identifier`, `can_rejects_invalid_direction` |
+| SWR-014 | CanInputAssembler | `can_decodes_paired_input_frames`, `can_pairs_frames_in_either_order`, `can_detects_sequence_mismatch`, `can_input_drives_control_cycle` |
+| SWR-015 | CAN output encoder / C CRC | `can_encodes_control_output`, `can_input_drives_control_cycle` |
 
-The CI scenario runner supplements the named checks by executing a Park-to-Drive cycle followed by an injected redundant-throttle disagreement and emitting the selected gear, mode, fault, torque limit, and CRC.
-
+The CI scenario runner supplements the named checks by encoding motion and driver-request CAN frames, assembling them into control inputs, executing a Park-to-Drive cycle followed by an injected redundant-throttle disagreement, and emitting the selected gear, mode, fault, torque limit, and output-frame CRC.

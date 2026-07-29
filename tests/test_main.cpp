@@ -1,3 +1,4 @@
+#include "tca/can_protocol.hpp"
 #include "tca/control_application.hpp"
 #include "tca/plausibility_monitor.hpp"
 #include "tca/safety_crc.h"
@@ -303,12 +304,147 @@ bool illegal_direction_change_reaches_safe_state() {
     return true;
 }
 
+bool can_crc_accepts_valid_motion_frame() {
+    const auto frame = tca::encode_motion_frame(valid_frame());
+    CHECK_TRUE(tca::has_valid_can_crc(frame));
+    return true;
+}
+
+bool can_rejects_bad_crc() {
+    tca::CanInputAssembler assembler{};
+    auto frame = tca::encode_motion_frame(valid_frame());
+    frame.data[0U] ^= 0x01U;
+    CHECK_EQ(assembler.ingest(frame, 100U).status, tca::CanIngestStatus::InvalidCrc);
+    return true;
+}
+
+bool can_rejects_wrong_dlc() {
+    tca::CanInputAssembler assembler{};
+    auto frame = tca::encode_motion_frame(valid_frame());
+    frame.dlc = 7U;
+    CHECK_EQ(assembler.ingest(frame, 100U).status, tca::CanIngestStatus::InvalidLength);
+    return true;
+}
+
+bool can_rejects_unknown_identifier() {
+    tca::CanInputAssembler assembler{};
+    auto frame = tca::encode_motion_frame(valid_frame());
+    frame.id = 0x777U;
+    CHECK_EQ(assembler.ingest(frame, 100U).status,
+             tca::CanIngestStatus::UnknownIdentifier);
+    return true;
+}
+
+bool can_decodes_paired_input_frames() {
+    tca::CanInputAssembler assembler{};
+    auto source = valid_frame();
+    source.vehicle_speed_kph = 42.3;
+    source.throttle_primary_pct = 31.5;
+    source.direction_request = tca::DirectionRequest::Drive;
+    CHECK_EQ(assembler.ingest(tca::encode_motion_frame(source), 120U).status,
+             tca::CanIngestStatus::WaitingForPair);
+    const auto result =
+        assembler.ingest(tca::encode_driver_request_frame(source), 120U);
+    CHECK_EQ(result.status, tca::CanIngestStatus::FrameReady);
+    CHECK_TRUE(result.sensor_frame.has_value());
+    CHECK_EQ(result.sensor_frame->sequence, source.sequence);
+    CHECK_EQ(result.sensor_frame->vehicle_speed_kph, source.vehicle_speed_kph);
+    CHECK_EQ(result.sensor_frame->throttle_primary_pct, source.throttle_primary_pct);
+    CHECK_EQ(result.sensor_frame->direction_request, source.direction_request);
+    return true;
+}
+
+bool can_pairs_frames_in_either_order() {
+    tca::CanInputAssembler assembler{};
+    const auto source = valid_frame();
+    CHECK_EQ(assembler.ingest(tca::encode_driver_request_frame(source), 100U).status,
+             tca::CanIngestStatus::WaitingForPair);
+    const auto result = assembler.ingest(tca::encode_motion_frame(source), 100U);
+    CHECK_EQ(result.status, tca::CanIngestStatus::FrameReady);
+    CHECK_TRUE(result.sensor_frame.has_value());
+    return true;
+}
+
+bool can_rejects_invalid_direction() {
+    tca::CanInputAssembler assembler{};
+    auto frame = tca::encode_driver_request_frame(valid_frame());
+    frame.data[2U] = 9U;
+    frame.data[7U] = 0U;
+    frame.data[7U] = tca_crc8_sae_j1850(nullptr, 0U);
+    CHECK_EQ(assembler.ingest(frame, 100U).status, tca::CanIngestStatus::InvalidCrc);
+
+    frame = tca::encode_driver_request_frame(valid_frame());
+    frame.data[2U] = 9U;
+    const std::array<std::uint8_t, 10U> protected_bytes{
+        static_cast<std::uint8_t>(frame.id & 0xFFU),
+        static_cast<std::uint8_t>((frame.id >> 8U) & 0xFFU),
+        frame.dlc,
+        frame.data[0U],
+        frame.data[1U],
+        frame.data[2U],
+        frame.data[3U],
+        frame.data[4U],
+        frame.data[5U],
+        frame.data[6U],
+    };
+    frame.data[7U] =
+        tca_crc8_sae_j1850(protected_bytes.data(), protected_bytes.size());
+    CHECK_EQ(assembler.ingest(frame, 100U).status,
+             tca::CanIngestStatus::InvalidSignal);
+    return true;
+}
+
+bool can_detects_sequence_mismatch() {
+    tca::CanInputAssembler assembler{};
+    const auto first = valid_frame();
+    auto second = valid_frame();
+    second.sequence = 2U;
+    CHECK_EQ(assembler.ingest(tca::encode_motion_frame(first), 100U).status,
+             tca::CanIngestStatus::WaitingForPair);
+    CHECK_EQ(assembler.ingest(tca::encode_driver_request_frame(second), 100U).status,
+             tca::CanIngestStatus::SequenceMismatch);
+    return true;
+}
+
+bool can_encodes_control_output() {
+    tca::ControlOutput output{};
+    output.sequence = 0x1234U;
+    output.selected_gear = tca::Gear::Third;
+    output.mode = tca::OperatingMode::Normal;
+    output.torque_limit_pct = 85U;
+    output.shift_inhibited = false;
+    const auto frame = tca::encode_control_output_frame(output);
+    CHECK_EQ(frame.id, tca::control_output_can_id);
+    CHECK_EQ(frame.data[0U], static_cast<std::uint8_t>(tca::Gear::Third));
+    CHECK_EQ(frame.data[3U], 85U);
+    CHECK_EQ(frame.data[5U], 0x34U);
+    CHECK_EQ(frame.data[6U], 0x12U);
+    CHECK_TRUE(tca::has_valid_can_crc(frame));
+    return true;
+}
+
+bool can_input_drives_control_cycle() {
+    tca::CanInputAssembler assembler{};
+    tca::ControlApplication application{};
+    auto source = valid_frame();
+    source.direction_request = tca::DirectionRequest::Drive;
+    source.vehicle_speed_kph = 10.0;
+    (void)assembler.ingest(tca::encode_motion_frame(source), 100U);
+    const auto decoded =
+        assembler.ingest(tca::encode_driver_request_frame(source), 100U);
+    CHECK_TRUE(decoded.sensor_frame.has_value());
+    const auto output = application.step(*decoded.sensor_frame, 100U, 900U);
+    CHECK_EQ(output.selected_gear, tca::Gear::First);
+    CHECK_TRUE(tca::has_valid_can_crc(tca::encode_control_output_frame(output)));
+    return true;
+}
+
 struct TestCase {
     const char *name;
     bool (*run)();
 };
 
-constexpr std::array<TestCase, 32U> tests{{
+constexpr std::array<TestCase, 42U> tests{{
     {"crc_empty_payload_is_defined", crc_empty_payload_is_defined},
     {"crc_rejects_null_non_empty_payload", crc_rejects_null_non_empty_payload},
     {"crc_is_deterministic", crc_is_deterministic},
@@ -341,6 +477,16 @@ constexpr std::array<TestCase, 32U> tests{{
     {"output_sequence_increments", output_sequence_increments},
     {"output_crc_is_reproducible", output_crc_is_reproducible},
     {"illegal_direction_change_reaches_safe_state", illegal_direction_change_reaches_safe_state},
+    {"can_crc_accepts_valid_motion_frame", can_crc_accepts_valid_motion_frame},
+    {"can_rejects_bad_crc", can_rejects_bad_crc},
+    {"can_rejects_wrong_dlc", can_rejects_wrong_dlc},
+    {"can_rejects_unknown_identifier", can_rejects_unknown_identifier},
+    {"can_decodes_paired_input_frames", can_decodes_paired_input_frames},
+    {"can_pairs_frames_in_either_order", can_pairs_frames_in_either_order},
+    {"can_rejects_invalid_direction", can_rejects_invalid_direction},
+    {"can_detects_sequence_mismatch", can_detects_sequence_mismatch},
+    {"can_encodes_control_output", can_encodes_control_output},
+    {"can_input_drives_control_cycle", can_input_drives_control_cycle},
 }};
 
 }  // namespace

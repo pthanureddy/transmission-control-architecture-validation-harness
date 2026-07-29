@@ -16,16 +16,18 @@ The requirements below are derived for this repository from the simplified syste
 | SWR-010 | Fault reset shall require valid input, applied brake, and near-zero speed. | Unit/integration test |
 | SWR-011 | Each output shall contain a monotonically increasing sequence number. | Integration test |
 | SWR-012 | Each output shall contain a deterministic CRC over safety-relevant output fields. | C unit/integration test |
+| SWR-013 | The CAN boundary shall reject unknown identifiers, non-eight-byte payloads, invalid CRC values, and unsupported direction signals. | Unit test |
+| SWR-014 | The CAN boundary shall combine motion and driver-request frames only when their rolling sequence values match. | Unit/integration test |
+| SWR-015 | The CAN boundary shall encode each control output as a fixed-size frame with the assigned identifier, mapped output fields, truncated sequence, and CRC. | Unit/integration test |
 
 ## Quality goals
 
 | ID | Goal | Implemented evidence |
 |---|---|---|
 | QG-001 Determinism | Equal initial state and equal inputs produce equal output fields. | Synchronous APIs, injected time/duration, reproducible CRC test |
-| QG-002 Testability | Components can be verified without hardware or network services. | Separate monitor/controller/supervisor APIs and 32 named checks |
+| QG-002 Testability | Components can be verified without hardware or network services. | Separate CAN/monitor/controller/supervisor APIs and 42 named checks |
 | QG-003 Failure visibility | The initiating fault remains observable until guarded reset. | First-fault latch and diagnostic output |
 | QG-004 Portability | The library builds with GCC and Clang using standard C11/C++20. | CI compiler matrix |
 | QG-005 Code quality | Warnings and selected static-analysis findings fail CI. | `-Werror`, clang-tidy, cppcheck |
 | QG-006 Runtime safety checks | Memory and undefined-behavior defects are checked in CI. | AddressSanitizer and UndefinedBehaviorSanitizer job |
 | QG-007 Traceability | Requirements map to named automated tests and design elements. | `docs/traceability.md` |
-
