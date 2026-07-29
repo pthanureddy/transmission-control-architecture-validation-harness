@@ -1,3 +1,4 @@
+#include "tca/can_protocol.hpp"
 #include "tca/control_application.hpp"
 
 #include <array>
@@ -25,6 +26,7 @@ const char *gear_name(const tca::Gear gear) {
 
 int main() {
     tca::ControlApplication application{};
+    tca::CanInputAssembler can_input{};
     const std::array<tca::SensorFrame, 5U> drive_cycle{{
         {1U, 0U, 0.0, 800.0, 0.0, 0.0, 0.0, true, tca::DirectionRequest::Park},
         {2U, 10U, 8.0, 1500.0, 400.0, 18.0, 17.5, false, tca::DirectionRequest::Drive},
@@ -33,16 +35,31 @@ int main() {
         {5U, 40U, 82.0, 3100.0, 2200.0, 22.0, 55.0, false, tca::DirectionRequest::Drive},
     }};
 
-    std::cout << "cycle,input_sequence,gear,mode,fault,torque_limit,crc\n";
+    std::cout << "cycle,input_sequence,gear,mode,fault,torque_limit,can_crc\n";
     for (std::size_t index = 0U; index < drive_cycle.size(); ++index) {
-        const tca::ControlOutput output = application.step(
-            drive_cycle[index], drive_cycle[index].timestamp_ms, 800U);
+        const auto motion_result =
+            can_input.ingest(tca::encode_motion_frame(drive_cycle[index]),
+                             drive_cycle[index].timestamp_ms);
+        if (motion_result.status != tca::CanIngestStatus::WaitingForPair) {
+            return 1;
+        }
+        const auto driver_result =
+            can_input.ingest(tca::encode_driver_request_frame(drive_cycle[index]),
+                             drive_cycle[index].timestamp_ms);
+        if (!driver_result.sensor_frame.has_value()) {
+            return 1;
+        }
+        const tca::ControlOutput output =
+            application.step(*driver_result.sensor_frame,
+                             drive_cycle[index].timestamp_ms,
+                             800U);
+        const tca::CanFrame output_frame = tca::encode_control_output_frame(output);
         std::cout << index << ',' << drive_cycle[index].sequence << ','
                   << gear_name(output.selected_gear) << ','
                   << static_cast<unsigned int>(output.mode) << ','
                   << static_cast<unsigned int>(output.fault) << ','
                   << static_cast<unsigned int>(output.torque_limit_pct) << ','
-                  << static_cast<unsigned int>(output.integrity_crc) << '\n';
+                  << static_cast<unsigned int>(output_frame.data[7U]) << '\n';
     }
 
     return 0;

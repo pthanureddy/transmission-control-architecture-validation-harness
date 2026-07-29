@@ -43,6 +43,7 @@ function(tca_enable_quality target)
 endfunction()
 
 add_library(tca_core
+    src/can_protocol.cpp
     src/control_application.cpp
     src/plausibility_monitor.cpp
     src/safety_supervisor.cpp

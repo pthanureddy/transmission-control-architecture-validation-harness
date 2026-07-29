@@ -2,6 +2,10 @@
 
 ## Component responsibilities
 
+### CAN protocol boundary
+
+`CanInputAssembler` validates two assigned 11-bit identifiers, an eight-byte payload contract, CRC-8, direction encoding, and a shared rolling sequence before assembling a `SensorFrame`. The output encoder maps the selected gear, mode, fault, torque limit, inhibition flag, and truncated sequence into a fixed-size CAN frame. The module models protocol behavior in memory; it does not open a CAN device.
+
 ### PlausibilityMonitor
 
 Validates physical ranges, redundant-throttle agreement, and input freshness. It returns a value object rather than changing control state.
@@ -24,11 +28,12 @@ Defines control-cycle ordering and the safe-state contract. It prevents an inval
 
 ## Control-cycle sequence
 
-1. Validate input ranges, redundancy, and freshness.
-2. If valid, calculate a direction/gear decision.
-3. Evaluate validation, direction, and watchdog faults.
-4. If a fault is latched, force the safe-state output contract.
-5. Increment the diagnostic sequence and calculate the output CRC.
+1. Validate and pair the motion and driver-request CAN frames.
+2. Validate decoded input ranges, redundancy, and freshness.
+3. If valid, calculate a direction/gear decision.
+4. Evaluate validation, direction, and watchdog faults.
+5. If a fault is latched, force the safe-state output contract.
+6. Increment the diagnostic sequence, calculate the application CRC, and encode the CAN output frame.
 
 ## Fault propagation
 
@@ -37,7 +42,7 @@ Faults are values, not exceptions. The first detected fault is preserved. The so
 ## Runtime and memory properties
 
 - no heap allocation in the control-path implementation;
-- fixed-size input, validation, decision, and output records;
+- fixed-size CAN, input, validation, decision, and output records;
 - bounded branch-based control flow;
 - explicit numeric limits through `QualityLimits`;
 - no file, network, clock, or operating-system dependency in `tca_core`;
@@ -45,5 +50,4 @@ Faults are values, not exceptions. The first detected fault is preserved. The so
 
 ## Verification seams
 
-Each component exposes a small synchronous API. Tests can inject frame timestamps, execution duration, speed, redundant sensor differences, and direction transitions without hardware or time-dependent behavior.
-
+Each component exposes a small synchronous API. Tests can inject CAN corruption, frame mismatches, timestamps, execution duration, speed, redundant sensor differences, and direction transitions without hardware or time-dependent behavior.
