@@ -7,4 +7,16 @@
 *.gcda
 *.gcno
 compile_commands.json
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+artifacts/
+robot-output/
+*.pyc
+__pycache__/
+*.egg-info/
 

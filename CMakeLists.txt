@@ -52,6 +52,14 @@ add_library(tca_core
 )
 target_include_directories(tca_core PUBLIC include)
 tca_enable_quality(tca_core)
+set_target_properties(tca_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+add_library(tca_sil_bridge SHARED src/sil_api.cpp)
+target_link_libraries(tca_sil_bridge PRIVATE tca_core)
+target_include_directories(tca_sil_bridge PUBLIC include)
+target_compile_definitions(tca_sil_bridge PRIVATE TCA_SIL_BUILD)
+set_target_properties(tca_sil_bridge PROPERTIES OUTPUT_NAME "tca_sil")
+tca_enable_quality(tca_sil_bridge)
 
 add_executable(transmission_architecture_runner app/main.cpp)
 target_link_libraries(transmission_architecture_runner PRIVATE tca_core)
@@ -63,5 +71,10 @@ add_executable(tca_tests tests/test_main.cpp)
 target_link_libraries(tca_tests PRIVATE tca_core)
 tca_enable_quality(tca_tests)
 add_test(NAME tca_unit_and_integration_tests COMMAND tca_tests)
+
+add_executable(tca_sil_bridge_tests tests/sil_api_test.cpp)
+target_link_libraries(tca_sil_bridge_tests PRIVATE tca_sil_bridge tca_core)
+tca_enable_quality(tca_sil_bridge_tests)
+add_test(NAME tca_sil_bridge_contract COMMAND tca_sil_bridge_tests)
 
 add_test(NAME architecture_scenario_smoke COMMAND transmission_architecture_runner)

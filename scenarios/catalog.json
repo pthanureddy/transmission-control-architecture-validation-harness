@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "scenarios": [
+    {
+      "id": "SIL-NOM-001",
+      "title": "Nominal paired frames produce a drive command",
+      "requirements": ["SIL-REQ-001", "SIL-REQ-002", "SIL-REQ-003"],
+      "steps": [
+        {"sequence": 1, "reception_timestamp_ms": 10, "signals": {"vehicle_speed_kph": 8.0, "direction_request": "DRIVE"}}
+      ],
+      "expected": {"statuses": ["WAITING_FOR_PAIR", "FRAME_READY"], "output_count": 1, "mode": "NORMAL", "fault": "NONE", "gear": "FIRST", "torque_limit_pct": 100, "shift_inhibited": false}
+    },
+    {
+      "id": "SIL-ORD-001",
+      "title": "Paired frames are accepted in reverse arrival order",
+      "requirements": ["SIL-REQ-002", "SIL-REQ-005"],
+      "steps": [
+        {"sequence": 2, "reception_timestamp_ms": 20, "order": ["driver", "motion"]}
+      ],
+      "expected": {"statuses": ["WAITING_FOR_PAIR", "FRAME_READY"], "output_count": 1, "mode": "NORMAL", "fault": "NONE"}
+    },
+    {
+      "id": "SIL-CRC-001",
+      "title": "Corrupted motion-frame CRC is rejected and traced",
+      "requirements": ["SIL-REQ-004", "SIL-REQ-005", "SIL-REQ-008"],
+      "steps": [
+        {"sequence": 3, "reception_timestamp_ms": 30, "fault": "corrupt_crc", "fault_target": "motion"}
+      ],
+      "expected": {"statuses": ["INVALID_CRC", "WAITING_FOR_PAIR"], "output_count": 0}
+    },
+    {
+      "id": "SIL-DLC-001",
+      "title": "Incorrect payload length is rejected and traced",
+      "requirements": ["SIL-REQ-004", "SIL-REQ-005", "SIL-REQ-008"],
+      "steps": [
+        {"sequence": 4, "reception_timestamp_ms": 40, "fault": "wrong_dlc", "fault_target": "motion"}
+      ],
+      "expected": {"statuses": ["INVALID_LENGTH", "WAITING_FOR_PAIR"], "output_count": 0}
+    },
+    {
+      "id": "SIL-ID-001",
+      "title": "Unknown CAN identifier is rejected and traced",
+      "requirements": ["SIL-REQ-004", "SIL-REQ-005", "SIL-REQ-008"],
+      "steps": [
+        {"sequence": 5, "reception_timestamp_ms": 50, "fault": "unknown_identifier", "fault_target": "motion"}
+      ],
+      "expected": {"statuses": ["UNKNOWN_IDENTIFIER", "WAITING_FOR_PAIR"], "output_count": 0}
+    },
+    {
+      "id": "SIL-SIG-001",
+      "title": "Unsupported direction signal is rejected and traced",
+      "requirements": ["SIL-REQ-004", "SIL-REQ-005", "SIL-REQ-008"],
+      "steps": [
+        {"sequence": 6, "reception_timestamp_ms": 60, "fault": "invalid_direction", "fault_target": "driver"}
+      ],
+      "expected": {"statuses": ["WAITING_FOR_PAIR", "INVALID_SIGNAL"], "output_count": 0}
+    },
+    {
+      "id": "SIL-SEQ-001",
+      "title": "Mismatched rolling counters prevent frame pairing",
+      "requirements": ["SIL-REQ-004", "SIL-REQ-005", "SIL-REQ-008"],
+      "steps": [
+        {"sequence": 7, "driver_sequence": 8, "reception_timestamp_ms": 70}
+      ],
+      "expected": {"statuses": ["WAITING_FOR_PAIR", "SEQUENCE_MISMATCH"], "output_count": 0}
+    },
+    {
+      "id": "SIL-DROP-001",
+      "title": "Dropped motion frame leaves the controller waiting for a pair",
+      "requirements": ["SIL-REQ-005", "SIL-REQ-008"],
+      "steps": [
+        {"sequence": 8, "reception_timestamp_ms": 80, "fault": "drop", "fault_target": "motion"}
+      ],
+      "expected": {"statuses": ["WAITING_FOR_PAIR"], "output_count": 0}
+    },
+    {
+      "id": "SIL-PLS-001",
+      "title": "Redundant throttle disagreement reaches the safe state",
+      "requirements": ["SIL-REQ-003", "SIL-REQ-006", "SIL-REQ-007", "SIL-REQ-009"],
+      "steps": [
+        {"sequence": 9, "reception_timestamp_ms": 90, "signals": {"throttle_primary_pct": 20.0, "throttle_redundant_pct": 40.0}}
+      ],
+      "expected": {"statuses": ["WAITING_FOR_PAIR", "FRAME_READY"], "output_count": 1, "mode": "SAFE_STATE", "fault": "SENSOR_DISAGREEMENT", "gear": "NEUTRAL", "torque_limit_pct": 0, "shift_inhibited": true, "active_dtc": "TCA-SENSOR-DISAGREEMENT"}
+    },
+    {
+      "id": "SIL-RNG-001",
+      "title": "Out-of-range vehicle speed reaches the safe state",
+      "requirements": ["SIL-REQ-003", "SIL-REQ-006", "SIL-REQ-007", "SIL-REQ-009"],
+      "steps": [
+        {"sequence": 10, "reception_timestamp_ms": 100, "signals": {"vehicle_speed_kph": 300.0}}
+      ],
+      "expected": {"statuses": ["WAITING_FOR_PAIR", "FRAME_READY"], "output_count": 1, "mode": "SAFE_STATE", "fault": "INPUT_RANGE", "gear": "NEUTRAL", "torque_limit_pct": 0, "shift_inhibited": true, "active_dtc": "TCA-INPUT-RANGE"}
+    },
+    {
+      "id": "SIL-AGE-001",
+      "title": "Delayed paired input is diagnosed as stale",
+      "requirements": ["SIL-REQ-005", "SIL-REQ-006", "SIL-REQ-007", "SIL-REQ-009"],
+      "steps": [
+        {"sequence": 11, "reception_timestamp_ms": 110, "now_ms": 230}
+      ],
+      "expected": {"statuses": ["WAITING_FOR_PAIR", "FRAME_READY"], "output_count": 1, "mode": "SAFE_STATE", "fault": "STALE_INPUT", "gear": "NEUTRAL", "torque_limit_pct": 0, "shift_inhibited": true, "active_dtc": "TCA-STALE-INPUT"}
+    },
+    {
+      "id": "SIL-DIR-001",
+      "title": "Reverse request at speed is faulted after nominal drive",
+      "requirements": ["SIL-REQ-003", "SIL-REQ-006", "SIL-REQ-007", "SIL-REQ-009"],
+      "steps": [
+        {"sequence": 12, "reception_timestamp_ms": 120, "signals": {"vehicle_speed_kph": 30.0, "direction_request": "DRIVE"}},
+        {"sequence": 13, "reception_timestamp_ms": 130, "signals": {"vehicle_speed_kph": 30.0, "direction_request": "REVERSE"}}
+      ],
+      "expected": {"statuses": ["WAITING_FOR_PAIR", "FRAME_READY", "WAITING_FOR_PAIR", "FRAME_READY"], "output_count": 2, "mode": "SAFE_STATE", "fault": "ILLEGAL_DIRECTION_CHANGE", "gear": "NEUTRAL", "torque_limit_pct": 0, "shift_inhibited": true, "active_dtc": "TCA-DIRECTION-CHANGE"}
+    },
+    {
+      "id": "SIL-WDG-001",
+      "title": "Injected execution overrun reaches the safe state",
+      "requirements": ["SIL-REQ-006", "SIL-REQ-007", "SIL-REQ-009"],
+      "steps": [
+        {"sequence": 14, "reception_timestamp_ms": 140, "execution_time_us": 6000}
+      ],
+      "expected": {"statuses": ["WAITING_FOR_PAIR", "FRAME_READY"], "output_count": 1, "mode": "SAFE_STATE", "fault": "WATCHDOG_OVERRUN", "gear": "NEUTRAL", "torque_limit_pct": 0, "shift_inhibited": true, "active_dtc": "TCA-WATCHDOG-OVERRUN"}
+    },
+    {
+      "id": "SIL-LAT-001",
+      "title": "First fault remains latched when a later fault occurs",
+      "requirements": ["SIL-REQ-006", "SIL-REQ-007", "SIL-REQ-009", "SIL-REQ-010"],
+      "steps": [
+        {"sequence": 15, "reception_timestamp_ms": 150, "signals": {"vehicle_speed_kph": 30.0, "throttle_primary_pct": 20.0, "throttle_redundant_pct": 40.0, "direction_request": "DRIVE"}},
+        {"sequence": 16, "reception_timestamp_ms": 160, "signals": {"vehicle_speed_kph": 30.0, "throttle_primary_pct": 20.0, "throttle_redundant_pct": 20.0, "direction_request": "REVERSE"}}
+      ],
+      "expected": {"statuses": ["WAITING_FOR_PAIR", "FRAME_READY", "WAITING_FOR_PAIR", "FRAME_READY"], "output_count": 2, "mode": "SAFE_STATE", "fault": "SENSOR_DISAGREEMENT", "gear": "NEUTRAL", "torque_limit_pct": 0, "shift_inhibited": true, "active_dtc": "TCA-SENSOR-DISAGREEMENT"}
+    }
+  ]
+}

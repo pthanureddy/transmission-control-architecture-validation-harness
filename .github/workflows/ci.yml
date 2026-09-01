@@ -22,7 +22,7 @@ jobs:
       CC: ${{ matrix.compiler.cc }}
       CXX: ${{ matrix.compiler.cxx }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Configure
         run: cmake -S . -B build -DTCA_WARNINGS_AS_ERRORS=ON
       - name: Build
@@ -35,7 +35,7 @@ jobs:
   quality-gates:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install static analysis tools
         run: sudo apt-get update && sudo apt-get install -y clang-tidy cppcheck
       - name: Configure clang-tidy build
@@ -53,3 +53,66 @@ jobs:
         run: cmake --build build-sanitized --parallel
       - name: Run sanitizer tests
         run: ctest --test-dir build-sanitized --output-on-failure
+
+  sil-automation:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install Python automation dependencies
+        run: |
+          python -m pip install --disable-pip-version-check --upgrade pip setuptools
+          python -m pip install --disable-pip-version-check -e ".[dev]"
+      - name: Configure compiled DUT bridge
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DTCA_WARNINGS_AS_ERRORS=ON
+      - name: Build compiled DUT bridge
+        run: cmake --build build --config Release --parallel
+      - name: Run C and C++ verification
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Set Linux SIL library path
+        if: runner.os == 'Linux'
+        shell: bash
+        run: echo "TCA_SIL_LIBRARY=$GITHUB_WORKSPACE/build/libtca_sil.so" >> "$GITHUB_ENV"
+      - name: Set Windows SIL library path
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: '"TCA_SIL_LIBRARY=$env:GITHUB_WORKSPACE\build\Release\tca_sil.dll" >> $env:GITHUB_ENV'
+      - name: Set evidence path
+        shell: bash
+        run: echo "TCA_SIL_ARTIFACT_DIR=$GITHUB_WORKSPACE/artifacts/sil" >> "$GITHUB_ENV"
+      - name: Run Python quality gates
+        run: |
+          python -m ruff format --check python python_tests scripts
+          python -m ruff check python python_tests scripts
+          python -m mypy
+          python scripts/check_sil_traceability.py
+      - name: Run Python tests and coverage gate
+        run: >-
+          python -m pytest --cov=tca_sil --cov-branch
+          --cov-report=term-missing --cov-report=xml
+      - name: Run Robot Framework SIL acceptance tests
+        run: >-
+          python -m robot --outputdir robot-output --xunit xunit.xml
+          robot_tests
+      - name: Validate structured SIL evidence
+        run: python scripts/validate_sil_evidence.py artifacts/sil
+      - name: Audit Python dependencies
+        if: runner.os == 'Linux'
+        run: python -m pip_audit --skip-editable
+      - name: Upload SIL verification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sil-verification-${{ runner.os }}
+          path: |
+            artifacts/sil
+            robot-output
+            coverage.xml
+          if-no-files-found: warn

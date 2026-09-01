@@ -1,0 +1,69 @@
+VERSION "1.0"
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+    CAT_DEF_
+    CAT_
+    FILTER
+    BA_DEF_DEF_
+    EV_DATA_
+    ENVVAR_DATA_
+    SGTYPE_
+    SGTYPE_VAL_
+    BA_DEF_SGTYPE_
+    BA_SGTYPE_
+    SIG_TYPE_REF_
+    VAL_TABLE_
+    SIG_GROUP_
+    SIG_VALTYPE_
+    SIGTYPE_VALTYPE_
+    BO_TX_BU_
+    BA_DEF_REL_
+    BA_REL_
+    BA_DEF_DEF_REL_
+    BU_SG_REL_
+    BU_EV_REL_
+    BU_BO_REL_
+    SG_MUL_VAL_
+
+BS_:
+
+BU_: MotionEcu DriverEcu TransmissionController TestHarness
+
+BO_ 384 MotionState: 8 MotionEcu
+ SG_ VehicleSpeedKph : 0|16@1+ (0.1,0) [0|6553.5] "km/h" TransmissionController
+ SG_ InputShaftRpm : 16|16@1+ (1,0) [0|65535] "rpm" TransmissionController
+ SG_ OutputShaftRpm : 32|16@1+ (1,0) [0|65535] "rpm" TransmissionController
+ SG_ RollingCounter : 48|8@1+ (1,0) [0|255] "" TransmissionController
+ SG_ Crc : 56|8@1+ (1,0) [0|255] "" TransmissionController
+
+BO_ 385 DriverRequest: 8 DriverEcu
+ SG_ ThrottlePrimaryPct : 0|8@1+ (0.5,0) [0|127.5] "%" TransmissionController
+ SG_ ThrottleRedundantPct : 8|8@1+ (0.5,0) [0|127.5] "%" TransmissionController
+ SG_ DirectionRequest : 16|8@1+ (1,0) [0|255] "" TransmissionController
+ SG_ BrakeApplied : 24|1@1+ (1,0) [0|1] "" TransmissionController
+ SG_ RollingCounter : 48|8@1+ (1,0) [0|255] "" TransmissionController
+ SG_ Crc : 56|8@1+ (1,0) [0|255] "" TransmissionController
+
+BO_ 640 ControlOutput: 8 TransmissionController
+ SG_ SelectedGear : 0|8@1+ (1,0) [0|255] "" TestHarness
+ SG_ OperatingMode : 8|8@1+ (1,0) [0|255] "" TestHarness
+ SG_ FaultCode : 16|8@1+ (1,0) [0|255] "" TestHarness
+ SG_ TorqueLimitPct : 24|8@1+ (1,0) [0|100] "%" TestHarness
+ SG_ ShiftInhibited : 32|1@1+ (1,0) [0|1] "" TestHarness
+ SG_ OutputSequence : 40|16@1+ (1,0) [0|65535] "" TestHarness
+ SG_ Crc : 56|8@1+ (1,0) [0|255] "" TestHarness
+
+CM_ "Repository-defined synthetic signal map. It is not an OEM DBC.";
+CM_ BO_ 384 "Synthetic motion signals consumed by the controller.";
+CM_ BO_ 385 "Synthetic driver-request signals consumed by the controller.";
+CM_ BO_ 640 "Synthetic controller result frame.";
+
+VAL_ 385 DirectionRequest 0 "Park" 1 "Neutral" 2 "Drive" 3 "Reverse" ;
+VAL_ 385 BrakeApplied 0 "Released" 1 "Applied" ;
+VAL_ 640 OperatingMode 0 "Initializing" 1 "Normal" 2 "SafeState" ;
+VAL_ 640 ShiftInhibited 0 "False" 1 "True" ;
