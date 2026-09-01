@@ -14,14 +14,17 @@ The local Windows workspace had Python 3.11.9 but no CMake or C/C++ compiler. Th
 | Python dependency audit | No known vulnerabilities after upgrading the environment's pip and setuptools; the editable local project was skipped because it is not a PyPI distribution |
 | DBC smoke | Motion and driver frames encoded/decoded with the expected IDs, payload bytes, counters, and CRC values |
 
-## Native and acceptance verification status
+## Hosted native and acceptance verification - 1 September 2026
 
-The local machine could not compile or execute the new shared-library bridge. Consequently, these results are deliberately **not** claimed in the local baseline:
+Public GitHub Actions run [33513245635](https://github.com/pthanureddy/transmission-control-architecture-validation-harness/actions/runs/33513245635) verified commit `409d62ae174f4391d8ff2608b7a7fe60ecf16cf1`.
 
-- CMake configuration or C/C++ build of the new bridge;
-- the new native CTest bridge-contract target;
-- the 15 Robot Framework cases against the compiled DUT;
-- Windows/Linux cross-platform behavior for the extension;
-- a hosted CI result for the extension.
+| Check | Result |
+|---|---|
+| Compiled C/C++ verification | 3/3 CTest targets passed on Windows, Ubuntu/GCC, and Ubuntu/Clang |
+| Robot Framework acceptance | 15/15 cases passed on Windows and Ubuntu against the compiled DUT bridge |
+| Structured scenario evidence | 14/14 scenario evidence sets passed hash and verdict validation on both operating systems |
+| Python tests and coverage | 48/48 pytest tests passed with 97.73% combined core coverage on Windows and Ubuntu |
+| Static analysis and sanitizers | clang-tidy, cppcheck, AddressSanitizer, and UndefinedBehaviorSanitizer jobs passed |
+| Dependency audit | No known vulnerabilities were reported by the Linux SIL job |
 
-The GitHub Actions SIL matrix is configured to perform those checks on both Windows and Linux and to upload the Robot and structured evidence. Update this file only after the hosted run has actually completed.
+The local machine still had no CMake/compiler, so the native and Robot results above are attributed only to the linked public hosted run.

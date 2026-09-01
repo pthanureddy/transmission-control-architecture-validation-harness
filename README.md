@@ -117,7 +117,7 @@ ctest --test-dir build-sanitized --output-on-failure
 - 14 traceable deterministic SIL scenarios and 15 Robot Framework acceptance cases, including a repeatability check;
 - 48 Python tests for the DBC/CRC, fault injection, catalog, diagnostic memory, evidence, and virtual-bus orchestration;
 - 97.73 percent combined line/branch coverage for the Python core in the recorded local baseline, with ctypes and Robot integration glue excluded from that denominator and exercised in hosted integration instead;
-- the configured Windows and Linux CI jobs are required to build the C ABI, run CTest and Robot, validate trace hashes, and upload Robot/JSON evidence; hosted results must be recorded only after execution.
+- public GitHub Actions run [33513245635](https://github.com/pthanureddy/transmission-control-architecture-validation-harness/actions/runs/33513245635) passed the Windows/Linux compiled-DUT matrix: 3/3 CTest targets, 48/48 pytest tests at 97.73 percent core coverage, 15/15 Robot cases, and 14/14 structured scenario evidence sets; GCC/Clang, static-analysis, and sanitizer jobs also passed.
 
 The measured results above describe this repository only. They do not establish production safety, timing, calibration, hardware compatibility, or standards compliance.
 
