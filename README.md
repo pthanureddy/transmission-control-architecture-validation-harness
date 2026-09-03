@@ -123,8 +123,8 @@ ctest --test-dir build-sanitized --output-on-failure
 - 14 traceable deterministic SIL scenarios and 15 Robot Framework acceptance cases, including a repeatability check;
 - 51 Python tests for the DBC/CRC, fault injection, catalog, diagnostic memory, exploratory campaign, evidence, and virtual-bus orchestration;
 - 15 exploratory boundary probes executed twice with deterministic trace and state-invariant checks;
-- 97.73 percent combined line/branch coverage for the Python core in the recorded local baseline, with ctypes and Robot integration glue excluded from that denominator and exercised in hosted integration instead;
-- public GitHub Actions run [33513245635](https://github.com/pthanureddy/transmission-control-architecture-validation-harness/actions/runs/33513245635) passed the Windows/Linux compiled-DUT matrix: 3/3 CTest targets, 48/48 pytest tests at 97.73 percent core coverage, 15/15 Robot cases, and 14/14 structured scenario evidence sets; GCC/Clang, static-analysis, and sanitizer jobs also passed.
+- 97.48 percent combined line/branch coverage for the Python core, with ctypes and Robot integration glue excluded from that denominator and exercised in hosted integration instead;
+- public GitHub Actions run [33769087012](https://github.com/pthanureddy/transmission-control-architecture-validation-harness/actions/runs/33769087012) passed the Windows/Linux compiled-DUT matrix: 3/3 CTest targets containing the 47-check runner, 51/51 pytest tests at 97.48 percent core coverage, 15/15 Robot cases, 14/14 structured requirement scenarios, and 15/15 exploratory probes executed twice per operating system; GCC/Clang, static-analysis, sanitizer, and dependency-audit jobs also passed.
 
 The measured results above describe this repository only. They do not establish production safety, timing, calibration, hardware compatibility, or standards compliance.
 
@@ -143,6 +143,7 @@ The measured results above describe this repository only. They do not establish 
 - [SIL test strategy](docs/sil-test-strategy.md)
 - [SIL fault catalogue](docs/sil-fault-catalog.md)
 - [Exploratory boundary test charter](docs/exploratory-test-charter.md)
+- [Exploratory session record - 3 September 2026](docs/exploratory-session-2026-09-03.md)
 - [SIL verified baseline](docs/sil-verified-baseline.md)
 
 ## Repository layout
