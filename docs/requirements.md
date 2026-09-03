@@ -25,7 +25,7 @@ The requirements below are derived for this repository from the simplified syste
 | ID | Goal | Implemented evidence |
 |---|---|---|
 | QG-001 Determinism | Equal initial state and equal inputs produce equal output fields. | Synchronous APIs, injected time/duration, reproducible CRC test |
-| QG-002 Testability | Components can be verified without hardware or network services. | Separate CAN/monitor/controller/supervisor APIs and 42 named checks |
+| QG-002 Testability | Components can be verified without hardware or network services. | Separate CAN/monitor/controller/supervisor APIs and 47 named checks |
 | QG-003 Failure visibility | The initiating fault remains observable until guarded reset. | First-fault latch and diagnostic output |
 | QG-004 Portability | The library builds with GCC and Clang using standard C11/C++20. | CI compiler matrix |
 | QG-005 Code quality | Warnings and selected static-analysis findings fail CI. | `-Werror`, clang-tidy, cppcheck |

@@ -2,7 +2,7 @@
 
 A deterministic C11/C++20 engineering exercise for decomposing a simplified transmission-control concept into software components, a fixed-size CAN protocol boundary, safety mechanisms, requirements, quality goals, architecture decisions, and executable verification. A Python 3.11 and Robot Framework software-in-the-loop (SIL) layer now drives the compiled controller through a C ABI, injects synthetic network and signal faults, and preserves structured fault-tracing evidence.
 
-The harness encodes and assembles synthetic CAN frames, selects a simplified gear state, rejects unsafe direction changes, latches faults, enters a torque-inhibited safe state, protects output records with a C CRC implementation, and emits a repeatable execution trace. Robot scenarios cover nominal and reversed frame ordering plus CRC, DLC, identifier, signal, sequence, dropped-frame, plausibility, range, stale-input, direction-change, watchdog, and first-fault cases.
+The harness encodes and assembles synthetic CAN frames, selects a simplified gear state, rejects unsafe direction changes, latches faults, enters a torque-inhibited safe state, protects output records with a C CRC implementation, and emits a repeatable execution trace. Robot scenarios cover nominal and reversed frame ordering plus CRC, DLC, identifier, signal, sequence, dropped-frame, plausibility, range, stale-input, direction-change, watchdog, and first-fault cases. A separate exploratory campaign probes five control limits immediately below, at, and above their configured boundaries.
 
 ## Evidence boundary
 
@@ -92,6 +92,12 @@ powershell -ExecutionPolicy Bypass -File scripts/verify-sil.ps1 -PythonOnly
 
 That reduced command does not run the compiled DUT bridge or Robot acceptance suite. Complete SIL verification is performed by the Windows/Linux GitHub Actions matrix.
 
+Run the scripted boundary campaign after building the shared library:
+
+```powershell
+python scripts/run_exploratory_campaign.py --output-dir artifacts/exploratory
+```
+
 ## Quality checks
 
 ```bash
@@ -109,13 +115,14 @@ ctest --test-dir build-sanitized --output-on-failure
 
 ## Verification snapshot
 
-- 42 named unit and integration checks in the custom deterministic test runner;
-- 3 CTest targets: the 42-check suite, C ABI bridge contract, and executable CAN-to-control scenario trace;
+- 47 named unit and integration checks in the custom deterministic test runner;
+- 3 CTest targets: the 47-check suite, C ABI bridge contract, and executable CAN-to-control scenario trace;
 - C11 and C++20 compilation with strict warnings treated as errors;
 - Linux CI matrix for GCC and Clang;
 - CI quality job for clang-tidy, cppcheck, AddressSanitizer, and UndefinedBehaviorSanitizer.
 - 14 traceable deterministic SIL scenarios and 15 Robot Framework acceptance cases, including a repeatability check;
-- 48 Python tests for the DBC/CRC, fault injection, catalog, diagnostic memory, evidence, and virtual-bus orchestration;
+- 51 Python tests for the DBC/CRC, fault injection, catalog, diagnostic memory, exploratory campaign, evidence, and virtual-bus orchestration;
+- 15 exploratory boundary probes executed twice with deterministic trace and state-invariant checks;
 - 97.73 percent combined line/branch coverage for the Python core in the recorded local baseline, with ctypes and Robot integration glue excluded from that denominator and exercised in hosted integration instead;
 - public GitHub Actions run [33513245635](https://github.com/pthanureddy/transmission-control-architecture-validation-harness/actions/runs/33513245635) passed the Windows/Linux compiled-DUT matrix: 3/3 CTest targets, 48/48 pytest tests at 97.73 percent core coverage, 15/15 Robot cases, and 14/14 structured scenario evidence sets; GCC/Clang, static-analysis, and sanitizer jobs also passed.
 
@@ -135,6 +142,7 @@ The measured results above describe this repository only. They do not establish 
 - [SIL architecture](docs/sil-architecture.md)
 - [SIL test strategy](docs/sil-test-strategy.md)
 - [SIL fault catalogue](docs/sil-fault-catalog.md)
+- [Exploratory boundary test charter](docs/exploratory-test-charter.md)
 - [SIL verified baseline](docs/sil-verified-baseline.md)
 
 ## Repository layout
@@ -143,8 +151,8 @@ The measured results above describe this repository only. They do not establish 
 include/tca/       public C and C++ interfaces
 src/               CAN, validation, control, supervision, orchestration, CRC
 app/               deterministic CAN-to-control scenario runner
-tests/             42 named unit and integration checks
-python/tca_sil/    virtual-CAN harness, C ABI adapter, fault tracing, Robot library
+tests/             47 named unit and integration checks
+python/tca_sil/    virtual-CAN harness, C ABI adapter, fault tracing, exploratory tooling
 python_tests/      automation-core tests using a labelled test-only adapter
 robot_tests/       compiled-DUT SIL acceptance cases
 network/           repository-defined synthetic DBC

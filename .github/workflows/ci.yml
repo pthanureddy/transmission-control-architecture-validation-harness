@@ -101,6 +101,8 @@ jobs:
         run: >-
           python -m robot --outputdir robot-output --xunit xunit.xml
           robot_tests
+      - name: Run exploratory boundary campaign
+        run: python scripts/run_exploratory_campaign.py --output-dir artifacts/exploratory
       - name: Validate structured SIL evidence
         run: python scripts/validate_sil_evidence.py artifacts/sil
       - name: Audit Python dependencies
@@ -113,6 +115,7 @@ jobs:
           name: sil-verification-${{ runner.os }}
           path: |
             artifacts/sil
+            artifacts/exploratory
             robot-output
             coverage.xml
           if-no-files-found: warn
