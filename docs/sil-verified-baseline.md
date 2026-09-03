@@ -28,3 +28,17 @@ Public GitHub Actions run [33513245635](https://github.com/pthanureddy/transmiss
 | Dependency audit | No known vulnerabilities were reported by the Linux SIL job |
 
 The local machine still had no CMake/compiler, so the native and Robot results above are attributed only to the linked public hosted run.
+
+## Exploratory boundary verification - 3 September 2026
+
+Public GitHub Actions run [33769087012](https://github.com/pthanureddy/transmission-control-architecture-validation-harness/actions/runs/33769087012) verified commit `39b6175a859acfd7d4b62a814ca737d8bab6705d`.
+
+| Check | Result |
+|---|---|
+| Compiled C/C++ verification | The 47-check runner passed within 3/3 CTest targets on Windows, Ubuntu/GCC, and Ubuntu/Clang |
+| Python tests and coverage | 51/51 tests passed with 97.48% combined Python-core line/branch coverage |
+| Robot Framework acceptance | 15/15 cases passed against the compiled DUT on Windows and Ubuntu |
+| Exploratory boundary campaign | 15/15 probes passed twice per environment; 60 hosted executions, deterministic traces, zero invariant anomalies |
+| Quality and security gates | Ruff, strict mypy, traceability, clang-tidy, cppcheck, AddressSanitizer, UndefinedBehaviorSanitizer, and dependency audit passed |
+
+The [dated session record](exploratory-session-2026-09-03.md) preserves the tested values, observed transitions, regression follow-up, and evidence boundary.

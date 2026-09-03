@@ -111,6 +111,67 @@ bool future_timestamp_does_not_underflow() {
     return true;
 }
 
+bool speed_limit_boundary_is_inclusive() {
+    auto frame = valid_frame();
+    frame.vehicle_speed_kph = 260.0;
+    CHECK_TRUE(tca::PlausibilityMonitor{}.validate(frame, 100U).valid);
+    frame.vehicle_speed_kph = 260.1;
+    CHECK_EQ(tca::PlausibilityMonitor{}.validate(frame, 100U).fault,
+             tca::FaultCode::InputRange);
+    return true;
+}
+
+bool throttle_disagreement_boundary_is_inclusive() {
+    auto frame = valid_frame();
+    frame.throttle_primary_pct = 20.0;
+    frame.throttle_redundant_pct = 25.0;
+    CHECK_TRUE(tca::PlausibilityMonitor{}.validate(frame, 100U).valid);
+    frame.throttle_redundant_pct = 25.5;
+    CHECK_EQ(tca::PlausibilityMonitor{}.validate(frame, 100U).fault,
+             tca::FaultCode::SensorDisagreement);
+    return true;
+}
+
+bool input_age_boundary_is_inclusive() {
+    auto frame = valid_frame();
+    frame.timestamp_ms = 100U;
+    CHECK_TRUE(tca::PlausibilityMonitor{}.validate(frame, 200U).valid);
+    CHECK_EQ(tca::PlausibilityMonitor{}.validate(frame, 201U).fault,
+             tca::FaultCode::StaleInput);
+    return true;
+}
+
+bool watchdog_budget_boundary_is_inclusive() {
+    tca::SafetySupervisor at_limit{};
+    at_limit.evaluate({true, tca::FaultCode::None}, tca::FaultCode::None, 5000U);
+    CHECK_EQ(at_limit.mode(), tca::OperatingMode::Normal);
+
+    tca::SafetySupervisor above_limit{};
+    above_limit.evaluate({true, tca::FaultCode::None}, tca::FaultCode::None, 5001U);
+    CHECK_EQ(above_limit.mode(), tca::OperatingMode::SafeState);
+    CHECK_EQ(above_limit.latched_fault(), tca::FaultCode::WatchdogOverrun);
+    return true;
+}
+
+bool direction_change_speed_boundary_is_inclusive() {
+    tca::ShiftController at_limit{};
+    auto frame = valid_frame();
+    frame.vehicle_speed_kph = 1.0;
+    frame.direction_request = tca::DirectionRequest::Drive;
+    CHECK_EQ(at_limit.update(frame).fault, tca::FaultCode::None);
+    frame.direction_request = tca::DirectionRequest::Reverse;
+    CHECK_EQ(at_limit.update(frame).fault, tca::FaultCode::None);
+
+    tca::ShiftController above_limit{};
+    frame.vehicle_speed_kph = 1.1;
+    frame.direction_request = tca::DirectionRequest::Drive;
+    CHECK_EQ(above_limit.update(frame).fault, tca::FaultCode::None);
+    frame.direction_request = tca::DirectionRequest::Reverse;
+    CHECK_EQ(above_limit.update(frame).fault,
+             tca::FaultCode::IllegalDirectionChange);
+    return true;
+}
+
 bool controller_starts_in_park() {
     CHECK_EQ(tca::ShiftController{}.current_gear(), tca::Gear::Park);
     return true;
@@ -444,7 +505,7 @@ struct TestCase {
     bool (*run)();
 };
 
-constexpr std::array<TestCase, 42U> tests{{
+constexpr std::array<TestCase, 47U> tests{{
     {"crc_empty_payload_is_defined", crc_empty_payload_is_defined},
     {"crc_rejects_null_non_empty_payload", crc_rejects_null_non_empty_payload},
     {"crc_is_deterministic", crc_is_deterministic},
@@ -457,6 +518,11 @@ constexpr std::array<TestCase, 42U> tests{{
     {"redundant_throttle_disagreement_is_detected", redundant_throttle_disagreement_is_detected},
     {"stale_input_is_detected", stale_input_is_detected},
     {"future_timestamp_does_not_underflow", future_timestamp_does_not_underflow},
+    {"speed_limit_boundary_is_inclusive", speed_limit_boundary_is_inclusive},
+    {"throttle_disagreement_boundary_is_inclusive", throttle_disagreement_boundary_is_inclusive},
+    {"input_age_boundary_is_inclusive", input_age_boundary_is_inclusive},
+    {"watchdog_budget_boundary_is_inclusive", watchdog_budget_boundary_is_inclusive},
+    {"direction_change_speed_boundary_is_inclusive", direction_change_speed_boundary_is_inclusive},
     {"controller_starts_in_park", controller_starts_in_park},
     {"drive_request_selects_first_gear_at_low_speed", drive_request_selects_first_gear_at_low_speed},
     {"drive_schedule_upshifts_with_speed", drive_schedule_upshifts_with_speed},
